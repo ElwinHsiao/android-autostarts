@@ -3,6 +3,7 @@ package com.elsdoerfer.android.autostarts;
 import java.util.ArrayList;
 
 import com.elsdoerfer.android.autostarts.ReceiverReader.OnLoadProgressListener;
+import com.elsdoerfer.android.autostarts.db.ComponentInfo;
 import com.elsdoerfer.android.autostarts.db.IntentFilterInfo;
 
 
@@ -40,35 +41,50 @@ class LoadTask extends ActivityAsyncTask<ListActivity, Object, Object,
 	@Override
 	protected ArrayList<IntentFilterInfo> doInBackground(Object... params) {
 		ReceiverReader reader = new ReceiverReader(mWrapped, new OnLoadProgressListener() {
+
 			@Override
-			public void onProgress(ArrayList<IntentFilterInfo> currentState, float progress) {
-				publishProgress(currentState, progress);
+			public void onProgress(float progress) {
+				publishProgress(progress);
 			}
+
+			@Override
+			public void onNewIntentFilterInfo(IntentFilterInfo info) {
+				publishProgress(info);
+			}
+
+			@Override
+			public void onNewReceiver(ComponentInfo receiver) {
+				// TODO Auto-generated method stub
+				
+			}
+			
+			
 		});
 		return reader.load();
 	}
 
 	@Override
 	protected void processPostExecute(ArrayList<IntentFilterInfo> result) {
-		mWrapped.mEvents = result;
-		mWrapped.apply();
+//		mWrapped.mEvents = result;
+//		mWrapped.apply();
 
-		mWrapped.setProgressBarIndeterminateVisibility(false);
-		mWrapped.setProgressBarVisibility(false);
-		if (mWrapped.mReloadItem != null)
-			mWrapped.mReloadItem.setEnabled(true);
-		mWrapped.updateEmptyText(true);
+
+		mWrapped.onLoadFinished(0);
 	}
 
 	@SuppressWarnings("unchecked")
 	@Override
 	protected void onProgressUpdate(Object... values) {
-		super.onProgressUpdate(values);
 		if (mWrapped != null) {
-			mWrapped.mEvents = (ArrayList<IntentFilterInfo>)values[0];
-			mWrapped.apply();
-			mCurrentProgress = (int)(((Float)values[1])*10000);
-			mWrapped.setProgress(mCurrentProgress);
+			if (values[0] instanceof Float) {
+				mCurrentProgress = (int)(((Float)values[0])*10000);
+				mWrapped.setProgress(mCurrentProgress);
+			} else if (values[0] instanceof IntentFilterInfo) {
+//				mWrapped.mEvents = (ArrayList<IntentFilterInfo>)values[0];				
+//				mWrapped.apply();
+				mWrapped.onNewIntentFilterInfo((IntentFilterInfo) values[0]);
+			}
+			
 		}
 	}
 }

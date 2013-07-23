@@ -86,8 +86,6 @@ Debugging enabled. There are however a few things we can do to help:
 class ToggleTask extends ActivityAsyncTask<ListActivity, Object, Object, Boolean> {
 
 	private ProgressDialog mPg;
-	private Boolean mDoEnable;
-	private ComponentInfo mComponent;
 
 	public ToggleTask(ListActivity wrapActivity) {
 		super(wrapActivity);
@@ -135,139 +133,26 @@ class ToggleTask extends ActivityAsyncTask<ListActivity, Object, Object, Boolean
 		// when the Activity disconnects.
 		final ListActivity activity = mWrapped;
 
-		mComponent = (ComponentInfo)params[0];
+		ComponentInfo component = (ComponentInfo)params[0];
 		// We could also read this right now, but we want to ensure
 		// we always do the state change that we announced to the user
 		// through the menu item caption (it's unlikely but possible
 		// that the component state changed in the background while
 		// the user decided what to do).
-		mDoEnable = (Boolean)params[1];
+		Boolean doEnable = (Boolean)params[1];
 
 		Log.i(ListActivity.TAG, "Asking package manger to "+
 				"change component state to "+
-				(mDoEnable ? "enabled": "disabled"));
+				(doEnable ? "enabled": "disabled"));
 
 		// As described above, in the rare case we are allowed to use
 		// setComponentEnabledSetting(), we should do so.
-		if (mWrapped.checkCallingOrSelfPermission(permission.CHANGE_COMPONENT_ENABLED_STATE)
-				     == PackageManager.PERMISSION_GRANTED) {
-			Log.i(ListActivity.TAG, "Calling setComponentEnabledState() directly");
-			PackageManager pm = activity.getPackageManager();
-			ComponentName c = new ComponentName(mComponent.packageInfo.packageName, mComponent.componentName);
-			pm.setComponentEnabledSetting(
-					c, mDoEnable ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-						: PackageManager.COMPONENT_ENABLED_STATE_DISABLED, 0);
-			mComponent.currentEnabledState = pm.getComponentEnabledSetting(c);
-			return (mComponent.isCurrentlyEnabled() == mDoEnable);
-		}
-		else {
-			Log.i(ListActivity.TAG, "Changing state by employing root access");
-
-			ContentResolver cr = mWrapped.getContentResolver();
-			boolean adbNeedsRedisable = false;
-			boolean adbEnabled;
-			try {
-				adbEnabled = (Settings.Secure.getInt(cr, Settings.Secure.ADB_ENABLED) == 1);
-			} catch (SettingNotFoundException e) {
-				// This started to happen at times on the ICS emulator
-				// (and possibly one user reported it).
-				Log.w(ListActivity.TAG,
-						"Failed to read adb_enabled setting, assuming no", e);
-				adbEnabled = false;
-			}
-
-			// If adb is disabled, try to enable it, temporarily. This will
-			// make our root call go through without hanging.
-            // TODO: It seems this might no longer be required under ICS.
-			if (!adbEnabled) {
-				Log.i(ListActivity.TAG, "Switching ADB on for the root call");
-				if (setADBEnabledState(cr, true)) {
-					adbEnabled = true;
-					adbNeedsRedisable = true;
-					// Let's be extra sure we don't run into any timing-related hiccups.
-					Utils.sleep(1000);
-				}
-			}
-
-			try {
-				// Run the command; we have different invocations we can try, but
-				// we'll stop at the first one we succeed with.
-				//
-				// On ICS, it became necessary to set a library path (which is
-				// cleared for suid programs, for obvious reasons). It can't hurt
-				// on older versions. See also  https://github.com/ChainsDD/su-binary/issues/6
-				final String libs = "LD_LIBRARY_PATH=\"$LD_LIBRARY_PATH:/system/lib\" ";
-				boolean success = false;
-				for (String[] set : new String[][] {
-						{ libs+"pm %s '%s/%s'", null },
-						{ libs+"sh /system/bin/pm %s '%s/%s'", null },
-						{ libs+"app_process /system/bin com.android.commands.pm.Pm %s '%s/%s'", "CLASSPATH=/system/framework/pm.jar" },
-						{ libs+"/system/bin/app_process /system/bin com.android.commands.pm.Pm %s '%s/%s'", "CLASSPATH=/system/framework/pm.jar" },
-				})
-				{
-					if (Utils.runRootCommand(String.format(set[0],
-							(mDoEnable ? "enable": "disable"),
-							mComponent.packageInfo.packageName, mComponent.componentName),
-							(set[1] != null) ? new String[] { set[1] } : null,
-							// The timeout shouldn't really be needed ever, since
-							// we now automatically enable ADB, which should work
-							// around any freezing issue. However, in rare, hard
-							// to reproduce cases, it still occurs, and in those
-							// cases the timeout will improve the user experience.
-							25000)) {
-						success = true;
-						break;
-					}
-				}
-
-				// We are happy if both the command itself succeed (return code)...
-				if (!success)
-					return false;
-
-				// ...and the state should now actually be what we expect.
-				// TODO: It would be more stable if we would reload
-				// getComponentEnabledSetting() regardless of the return code.
-				final PackageManager pm = activity.getPackageManager();
-				ComponentName c = new ComponentName(
-						mComponent.packageInfo.packageName, mComponent.componentName);
-				mComponent.currentEnabledState = pm.getComponentEnabledSetting(c);
-
-				success = mComponent.isCurrentlyEnabled() == mDoEnable;
-				if (success)
-					Log.i(ListActivity.TAG, "State successfully changed");
-				else
-					Log.i(ListActivity.TAG, "State change failed");
-				return success;
-			}
-			finally {
-				if (adbNeedsRedisable) {
-					Log.i(ListActivity.TAG, "Switching ADB off again");
-					setADBEnabledState(cr, false);
-					// Delay releasing the GUI for a while, there seems to
-					// be a mysterious problem of repeating this process multiple
-					// times causing it to somehow lock up, no longer work.
-					// I'm hoping this might help.
-					Utils.sleep(5000);
-				}
-			}
+		if (activity
+				.checkCallingOrSelfPermission(permission.CHANGE_COMPONENT_ENABLED_STATE) == PackageManager.PERMISSION_GRANTED) {
+			return Utils.setConponentEnable(activity, component, doEnable);
+		} else {
+			return Utils.setConponentEnableByRoot(activity, component, doEnable);
 		}
 	}
 
-	/**
-	 * Enable/Disable the "ADB Debugging" setting. We do this either by employing
-	 * the WRITE_SECURE_SETTINGS permission, if we have it, or by using a root call.
-	 */
-	private boolean setADBEnabledState(ContentResolver cr, boolean enable) {
-		if (mWrapped.checkCallingOrSelfPermission(permission.WRITE_SECURE_SETTINGS)
-                == PackageManager.PERMISSION_GRANTED) {
-			Log.i(ListActivity.TAG, "Using secure settings API to touch ADB setting");
-			return Settings.Secure.putInt(cr, Settings.Secure.ADB_ENABLED, enable ? 1 : 0);
-		}
-		else {
-			Log.i(ListActivity.TAG, "Using setprop call to touch ADB setting");
-			return Utils.runRootCommand(
-					String.format("setprop persist.service.adb.enable %s", enable ? 1 : 0),
-					null, null);
-		}
-	}
 }

@@ -2,7 +2,8 @@ package com.elsdoerfer.android.autostarts;
 
 import java.util.ArrayList;
 
-import android.app.*;
+import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.DialogInterface;
 import android.content.DialogInterface.OnMultiChoiceClickListener;
 import android.content.Intent;
@@ -17,6 +18,7 @@ import android.text.Spanned;
 import android.text.method.LinkMovementMethod;
 import android.text.method.MovementMethod;
 import android.text.style.ClickableSpan;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -34,7 +36,7 @@ import com.elsdoerfer.android.autostarts.db.IntentFilterInfo;
 
 public class ListActivity extends ExpandableListFragmentActivity {
 
-	static final String TAG = "Autostarts";
+	static final String TAG = "Autostarts-ListActivity";
 	static final Boolean LOGV = false;
 
 	static final private int MENU_VIEW = 1;
@@ -49,10 +51,13 @@ public class ListActivity extends ExpandableListFragmentActivity {
 	static final int DIALOG_STATE_CHANGE_FAILED = 7;
 
 	static final private String PREFS_NAME = "common";
-	static final private String PREF_FILTER_SYS_APPS = "filter-sys-apps";
-	static final private String PREF_FILTER_SHOW_CHANGED = "show-changed-only";
-	static final private String PREF_FILTER_UNKNOWN = "filter-unknown-events";
-	static final private String PREF_GROUPING = "grouping";
+	static final private String PREF_FILTER_KEY = "filter";
+	static final private String PREF_GROUPING_KEY = "grouping";
+//	static final private String PREF_FILTER_SYS_APPS = "filter-sys-apps";
+//	static final private String PREF_FILTER_SHOW_CHANGED = "show-changed-only";
+//	static final private String PREF_FILTER_UNKNOWN = "filter-unknown-events";
+//	protected static final String PREF_FILTER_HIDE_DISABLED = "show-enable-only";
+//	protected static final String PREF_FILTER_HIDE_ENABLED = "show-disable-only";
 
 	private MenuItem mExpandCollapseToggleItem;
 	private MenuItem mGroupingModeItem;
@@ -61,7 +66,7 @@ public class ListActivity extends ExpandableListFragmentActivity {
 
 	MyExpandableListAdapter mListAdapter;
 	ArrayList<IntentFilterInfo> mEvents;
-	private DatabaseHelper mDb;
+//	private DatabaseHelper mDb;
 	private SharedPreferences mPrefs;
 	private Boolean mExpandSuggested = true;
 	protected ToggleTask mToggleTask;
@@ -85,23 +90,33 @@ public class ListActivity extends ExpandableListFragmentActivity {
 
 		// Set everything up.
 		mPrefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-		mDb = new DatabaseHelper(this);
+		int grouping = mPrefs.getInt(PREF_GROUPING_KEY, MyExpandableListAdapter.GROUP_BY_ACTION);
+		int filter = mPrefs.getInt(PREF_FILTER_KEY, MyExpandableListAdapter.FILTER_HIDE_SYSTEM_APP|MyExpandableListAdapter.FILTER_HIDE_UNKNOWN_EVENTS);
+//		mDb = new DatabaseHelper(this);
 		// This is just to workaround "Can't upgrade read-only database..."
 		// exceptions, when an upgrade is necessary.
-		mDb.getWritableDatabase().close();
-		mListAdapter = new MyExpandableListAdapter(this);
+//		mDb.getWritableDatabase().close();
+		mListAdapter = new MyExpandableListAdapter(this, grouping);
+		mListAdapter.setFilter(filter);
 		setListAdapter(mListAdapter);
+		
+		getExpandableListView().setItemsCanFocus(false);
+		
 
 		// Restore preferences
-		mListAdapter.setFilterSystemApps(
-				mPrefs.getBoolean(PREF_FILTER_SYS_APPS, false));
-		mListAdapter.setShowChangedOnly(
-				mPrefs.getBoolean(PREF_FILTER_SHOW_CHANGED, false));
-		mListAdapter.setFilterUnknown(
-				mPrefs.getBoolean(PREF_FILTER_UNKNOWN, true));
-		mListAdapter.setGrouping(mPrefs.getString(PREF_GROUPING, "action").equals("package")
-				? MyExpandableListAdapter.GROUP_BY_PACKAGE
-				: MyExpandableListAdapter.GROUP_BY_ACTION);
+//		mListAdapter.setFilterSystemApps(
+//				mPrefs.getBoolean(PREF_FILTER_SYS_APPS, false));
+//		mListAdapter.setFilterShowChangedOnly(
+//				mPrefs.getBoolean(PREF_FILTER_SHOW_CHANGED, false));
+//		mListAdapter.setFilterHideUnknownEvents(
+//				mPrefs.getBoolean(PREF_FILTER_UNKNOWN, true));
+//		mListAdapter.setFilterHideDisabled(
+//				mPrefs.getBoolean(PREF_FILTER_HIDE_DISABLED, false));
+//		mListAdapter.setFilterHideEnabled(
+//				mPrefs.getBoolean(PREF_FILTER_HIDE_ENABLED, false));
+//		mListAdapter.setGroupMode(
+//				? MyExpandableListAdapter.GROUP_BY_PACKAGE
+//				: MyExpandableListAdapter.GROUP_BY_ACTION);
 
 		// Init/restore retained and instance data. If we have data
 		// retained, we can speed things up significantly by not having
@@ -206,8 +221,9 @@ public class ListActivity extends ExpandableListFragmentActivity {
 
 	@Override
 	protected void onDestroy() {
-		if (mDb != null)
-			mDb.close();
+		Log.d(TAG, "in onDestroy");
+//		if (mDb != null)
+//			mDb.close();
 		// Unattach the activity from a potentially running task.
 		if (mToggleTask != null)
 			mToggleTask.connectTo(null);
@@ -263,17 +279,10 @@ public class ListActivity extends ExpandableListFragmentActivity {
 	public boolean onOptionsItemSelected(MenuItem item) {
 		switch (item.getItemId()) {
 		case MENU_GROUPING:
-			String groupingPref = "";
-			if (mListAdapter.getGrouping() == MyExpandableListAdapter.GROUP_BY_ACTION) {
-				mListAdapter.setGrouping(MyExpandableListAdapter.GROUP_BY_PACKAGE);
-				groupingPref = "package";
-			}
-			else {
-				mListAdapter.setGrouping(MyExpandableListAdapter.GROUP_BY_ACTION);
-				groupingPref = "action";
-			}
+			int groupingPref = 1 - mListAdapter.getGrouping();
+			mListAdapter.setGroupMode(groupingPref);
+			mPrefs.edit().putInt(PREF_GROUPING_KEY, groupingPref).commit();
 			mListAdapter.notifyDataSetChanged();
-			mPrefs.edit().putString(PREF_GROUPING, groupingPref).commit();
 			return true;
 
 		case MENU_VIEW:
@@ -362,39 +371,60 @@ public class ListActivity extends ExpandableListFragmentActivity {
 			// updating it would be enough, or if we actually have to
 			// find the correct views and switch them...
 			boolean[] initState = new boolean[] {
-				mListAdapter.getFilterSystemApps(),
-				mListAdapter.getShowChangedOnly(),
-				mListAdapter.getFilterUnknown(),
+				mListAdapter.isFilterHideSystemApps(),
+				mListAdapter.isFilterHideUnknownEvents(),
+				mListAdapter.isFilterHideDisabled(),
+				mListAdapter.isFilterHideEnabled(),
+				mListAdapter.isFilterShowChangedOnly(),
 			};
 
 			return new AlertDialog.Builder(this)
 				.setMultiChoiceItems(new CharSequence[] {
 						getString(R.string.hide_sys_apps),
-						getString(R.string.show_changed_only),
 						getString(R.string.hide_unknown),
+						getString(R.string.hide_disable_only),
+						getString(R.string.hide_enable_only),
+						getString(R.string.show_changed_only),
 					},
 					initState,
 					new OnMultiChoiceClickListener() {
 						public void onClick(DialogInterface dialog, int which,
 								boolean isChecked) {
-							if (which == 0) {
+							switch (which) {
+							case 0:
 								mListAdapter.setFilterSystemApps(isChecked);
 								mListAdapter.notifyDataSetChanged();
 								updateEmptyText();
-								mPrefs.edit().putBoolean(PREF_FILTER_SYS_APPS, isChecked).commit();
-							}
-							else if (which == 1) {
-								mListAdapter.setShowChangedOnly(isChecked);
+//								mPrefs.edit().putBoolean(PREF_FILTER_SYS_APPS, isChecked).commit();
+								break;
+							case 1:
+								mListAdapter.setFilterHideUnknownEvents(isChecked);
 								mListAdapter.notifyDataSetChanged();
 								updateEmptyText();
-								mPrefs.edit().putBoolean(PREF_FILTER_SHOW_CHANGED, isChecked).commit();
-							}
-							else if (which == 2) {
-								mListAdapter.setFilterUnknown(isChecked);
+//								mPrefs.edit().putBoolean(PREF_FILTER_UNKNOWN, isChecked).commit();
+								break;
+							case 2:								
+								mListAdapter.setFilterHideDisabled(isChecked);
 								mListAdapter.notifyDataSetChanged();
 								updateEmptyText();
-								mPrefs.edit().putBoolean(PREF_FILTER_UNKNOWN, isChecked).commit();
+//								mPrefs.edit().putBoolean(PREF_FILTER_HIDE_DISABLED, isChecked).commit();
+
+								break;
+							case 3:
+								mListAdapter.setFilterHideEnabled(isChecked);
+								mListAdapter.notifyDataSetChanged();
+								updateEmptyText();
+//								mPrefs.edit().putBoolean(PREF_FILTER_HIDE_ENABLED, isChecked).commit();
+								break;
+							case 4:
+								mListAdapter.setFilterShowChangedOnly(isChecked);
+								mListAdapter.notifyDataSetChanged();
+								updateEmptyText();
+//								mPrefs.edit().putBoolean(PREF_FILTER_SHOW_CHANGED, isChecked).commit();
+								break;
 							}
+							mPrefs.edit().putInt(PREF_FILTER_KEY, mListAdapter.getFilter()).commit();
+
 						}
 
 					})
@@ -417,6 +447,19 @@ public class ListActivity extends ExpandableListFragmentActivity {
 	void apply() {
 		mListAdapter.setData(mEvents);
 		mListAdapter.notifyDataSetChanged();
+	}
+	
+	public void onNewIntentFilterInfo(IntentFilterInfo info) {
+		mListAdapter.addData(info);
+		mListAdapter.notifyDataSetChanged();
+	}
+	
+	public void onLoadFinished(int state) {
+		setProgressBarIndeterminateVisibility(false);
+		setProgressBarVisibility(false);
+		if (mReloadItem != null)
+			mReloadItem.setEnabled(true);
+		updateEmptyText(true);
 	}
 
 	private void loadAndApply() {

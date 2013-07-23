@@ -15,8 +15,10 @@
     <string name="group_by_package">Group by application</string>
     <string name="group_by_action">Group by event</string>
     <string name="hide_sys_apps">Hide system apps</string>
-    <string name="show_changed_only">Show changed only</string>
+    <string name="show_changed_only">show changed only</string>
     <string name="hide_unknown">Hide unknown events</string>
+    <string name="hide_disable_only">Hide disabled</string>
+    <string name="hide_enable_only">Hide enabled</string>
     <string name="expand_all">Expand all</string>
     <string name="collapse_all">Collapse all</string>
     <string name="reload">Reload</string>
@@ -30,4 +32,7 @@
     <string name="confirm_google_talk">If Google Talk is disabled, you are likely going to run into issues with hanging Android Market downloads, the starting up Google Talk yourself whenever necessary can help overcome them. Sure you want to proceed?</string>
     <string name="state_change_failed">Unable to change the state of the selected component.\n\nMost likely, your device does not have root access, which is required.</string>
     <string name="close_help">Close help and return to app</string>
+    <string name="new_install_contain">%s \'s receivers</string>
+    
+    
 </resources>

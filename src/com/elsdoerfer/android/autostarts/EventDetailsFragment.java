@@ -42,7 +42,7 @@ public class EventDetailsFragment extends DialogFragment {
 
         View v = activity.getLayoutInflater().inflate(
                 R.layout.receiver_info_panel, null, false);
-                String formattedString = String.format(
+        String formattedString = String.format(
 				getString(R.string.receiver_info),
 				event.componentInfo.componentName, event.action, event.priority);
 		((TextView)v.findViewById(R.id.message)).setText(

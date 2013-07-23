@@ -12,6 +12,15 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
+import com.elsdoerfer.android.autostarts.db.ComponentInfo;
+
+import android.Manifest.permission;
+import android.app.Activity;
+import android.content.ComponentName;
+import android.content.ContentResolver;
+import android.content.pm.PackageManager;
+import android.provider.Settings;
+import android.provider.Settings.SettingNotFoundException;
 import android.util.Log;
 
 public class Utils {
@@ -276,6 +285,137 @@ public class Utils {
 			Thread.sleep(time);
 		} catch (InterruptedException e) {
 			e.printStackTrace();
+		}
+	}
+	
+
+	public static Boolean setConponentEnable(final Activity activity,
+			ComponentInfo component, Boolean doEnable) {
+		Log.i(ListActivity.TAG, "Calling setComponentEnabledState() directly");
+		PackageManager pm = activity.getPackageManager();
+		ComponentName c = new ComponentName(component.packageInfo.packageName,
+				component.componentName);
+		pm.setComponentEnabledSetting(c,
+				doEnable ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+						: PackageManager.COMPONENT_ENABLED_STATE_DISABLED, 0);
+		component.currentEnabledState = pm.getComponentEnabledSetting(c);
+		return (component.isCurrentlyEnabled() == doEnable);
+	}
+
+	public static Boolean setConponentEnableByRoot(final Activity activity,
+			ComponentInfo component, Boolean doEnable) {
+		Log.i(ListActivity.TAG, "Changing state by employing root access");
+
+		ContentResolver cr = activity.getContentResolver();
+		boolean adbNeedsRedisable = false;
+		boolean adbEnabled;
+		try {
+			adbEnabled = (Settings.Secure.getInt(cr,
+					Settings.Secure.ADB_ENABLED) == 1);
+		} catch (SettingNotFoundException e) {
+			// This started to happen at times on the ICS emulator
+			// (and possibly one user reported it).
+			Log.w(ListActivity.TAG,
+					"Failed to read adb_enabled setting, assuming no", e);
+			adbEnabled = false;
+		}
+
+		// If adb is disabled, try to enable it, temporarily. This will
+		// make our root call go through without hanging.
+		// TODO: It seems this might no longer be required under ICS.
+		if (!adbEnabled) {
+			Log.i(ListActivity.TAG, "Switching ADB on for the root call");
+			if (setADBEnabledState(activity, cr, true)) {
+				adbEnabled = true;
+				adbNeedsRedisable = true;
+				// Let's be extra sure we don't run into any timing-related
+				// hiccups.
+				Utils.sleep(1000);
+			}
+		}
+
+		try {
+			// Run the command; we have different invocations we can try, but
+			// we'll stop at the first one we succeed with.
+			//
+			// On ICS, it became necessary to set a library path (which is
+			// cleared for suid programs, for obvious reasons). It can't hurt
+			// on older versions. See also
+			// https://github.com/ChainsDD/su-binary/issues/6
+			final String libs = "LD_LIBRARY_PATH=\"$LD_LIBRARY_PATH:/system/lib\" ";
+			boolean success = false;
+			for (String[] set : new String[][] {
+					{ libs + "pm %s '%s/%s'", null },
+					{ libs + "sh /system/bin/pm %s '%s/%s'", null },
+					{ libs + "app_process /system/bin com.android.commands.pm.Pm %s '%s/%s'", "CLASSPATH=/system/framework/pm.jar" },
+					{ libs + "/system/bin/app_process /system/bin com.android.commands.pm.Pm %s '%s/%s'", "CLASSPATH=/system/framework/pm.jar" }, }) {
+				if (Utils.runRootCommand(String.format(set[0],
+						(doEnable ? "enable" : "disable"),
+						component.packageInfo.packageName,
+						component.componentName),
+						(set[1] != null) ? new String[] { set[1] } : null,
+						// The timeout shouldn't really be needed ever, since
+						// we now automatically enable ADB, which should work
+						// around any freezing issue. However, in rare, hard
+						// to reproduce cases, it still occurs, and in those
+						// cases the timeout will improve the user experience.
+						25000)) {
+					success = true;
+					break;
+				}
+			}
+
+			// We are happy if both the command itself succeed (return code)...
+			if (!success)
+				return false;
+
+			// ...and the state should now actually be what we expect.
+			// TODO: It would be more stable if we would reload
+			// getComponentEnabledSetting() regardless of the return code.
+			PackageManager pm = activity.getPackageManager();
+			component.currentEnabledState = getComponentEnabled(component, pm);
+
+			success = component.isCurrentlyEnabled() == doEnable;
+			if (success)
+				Log.i(ListActivity.TAG, "State successfully changed");
+			else
+				Log.i(ListActivity.TAG, "State change failed");
+			return success;
+		} finally {
+			if (adbNeedsRedisable) {
+				Log.i(ListActivity.TAG, "Switching ADB off again");
+				setADBEnabledState(activity, cr, false);
+				// Delay releasing the GUI for a while, there seems to
+				// be a mysterious problem of repeating this process multiple
+				// times causing it to somehow lock up, no longer work.
+				// I'm hoping this might help.
+				Utils.sleep(5000);
+			}
+		}
+	}
+
+	public static int getComponentEnabled(ComponentInfo component, PackageManager pm) {
+		ComponentName c = new ComponentName(component.packageInfo.packageName, component.componentName);
+		return pm.getComponentEnabledSetting(c);
+	}
+
+	/**
+	 * Enable/Disable the "ADB Debugging" setting. We do this either by
+	 * employing the WRITE_SECURE_SETTINGS permission, if we have it, or by
+	 * using a root call.
+	 * @param activity 
+	 */
+	private static boolean setADBEnabledState(Activity activity, ContentResolver cr, boolean enable) {
+		if (activity.checkCallingOrSelfPermission(permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
+			Log.i(ListActivity.TAG,
+					"Using secure settings API to touch ADB setting");
+			return Settings.Secure.putInt(cr, Settings.Secure.ADB_ENABLED,
+					enable ? 1 : 0);
+		} else {
+			Log.i(ListActivity.TAG, "Using setprop call to touch ADB setting");
+			return Utils.runRootCommand(String.format(
+					"setprop persist.service.adb.enable %s", enable ? 1 : 0),
+					null, null);
 		}
 	}
 }

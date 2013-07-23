@@ -1,5 +1,7 @@
 package com.elsdoerfer.android.autostarts.db;
 
+import java.util.ArrayList;
+
 import android.content.pm.PackageManager;
 import android.os.Parcel;
 import android.os.Parcelable;
@@ -15,7 +17,7 @@ public class ComponentInfo implements Parcelable {
 	public PackageInfo packageInfo;
 	public String componentName;
 	//  The receivers this component uses.
-	public IntentFilterInfo[] intentFilters;
+	public ArrayList<IntentFilterInfo> intentFilters = new ArrayList<IntentFilterInfo>();
 
 	// This is peripheral data
 	public String componentLabel;

@@ -15,6 +15,7 @@ public class PackageInfo implements Parcelable {
 	public String packageLabel;
 	public Drawable icon;
 	public boolean isSystem;
+	public long lastUpdateTime;
 
 	public PackageInfo(android.content.pm.PackageInfo packageInfo) {
 		this.packageName = packageInfo.packageName;

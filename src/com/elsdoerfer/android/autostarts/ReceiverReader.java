@@ -2,6 +2,8 @@ package com.elsdoerfer.android.autostarts;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 import org.xmlpull.v1.XmlPullParser;
@@ -64,7 +66,9 @@ public class ReceiverReader {
 		"http://schemas.android.com/apk/res/android";
 
 	public interface OnLoadProgressListener {
-		public void onProgress(ArrayList<IntentFilterInfo> currentState, float progress);
+		public void onProgress(float progress);
+		public void onNewIntentFilterInfo(IntentFilterInfo info);
+		public void onNewReceiver(ComponentInfo receiver);
 	}
 
 	private static enum ParserState { Unknown, InManifest,
@@ -103,9 +107,18 @@ public class ReceiverReader {
 
 		List<android.content.pm.PackageInfo> packages =
 			mPackageManager.getInstalledPackages(PackageManager.GET_DISABLED_COMPONENTS);
+		Collections.sort(packages, new Comparator<Object>() {
+			@Override
+			public int compare(Object object1, Object object2) {
+				android.content.pm.PackageInfo o1 = (android.content.pm.PackageInfo) object1;
+				android.content.pm.PackageInfo o2 = (android.content.pm.PackageInfo) object2;
+				return -(int) (o1.lastUpdateTime - o2.lastUpdateTime);
+			}
+		});
+		
 		int packageCount = packages.size();
 		for (int i=0; i<packageCount; i++)
-		{
+		{			
 			android.content.pm.PackageInfo p = packages.get(i);
 
 			if (LOGV) Log.v(TAG, "Processing package "+p.packageName);
@@ -125,16 +138,16 @@ public class ReceiverReader {
 				// so that when a receiver status is toggled while we are
 				// still loading, it's changed attributes are not reset by
 				// the next progress update.
-				@SuppressWarnings("unchecked")
-				ArrayList<IntentFilterInfo> copy = (ArrayList<IntentFilterInfo>) mResult.clone();
-				mOnLoadProgressListener.onProgress(copy, i/(float)packageCount);
+//				@SuppressWarnings("unchecked")
+//				ArrayList<IntentFilterInfo> copy = (ArrayList<IntentFilterInfo>) mResult.clone();
+				mOnLoadProgressListener.onProgress(i/(float)packageCount);
 			}
 		}
 
 		return mResult;
 	}
 
-	private void parsePackage(android.content.pm.PackageInfo p) {
+	public void parsePackage(android.content.pm.PackageInfo p) {
 		// Open the manifest file
 		XmlResourceParser xml = null;
 		Resources resources = null;
@@ -278,6 +291,7 @@ public class ReceiverReader {
 			// be to load it on-demand, but do that again in a thread.
 			mCurrentPackage.icon =
 				mAndroidPackage.applicationInfo.loadIcon(mPackageManager);
+			mCurrentPackage.lastUpdateTime = mAndroidPackage.lastUpdateTime;
 		}
 
 		mCurrentComponent = new ComponentInfo();
@@ -293,8 +307,10 @@ public class ReceiverReader {
 
 	void endReceiver() {
 		if (mCurrentState == ParserState.InReceiver) {
-			mCurrentComponent = null;
 			mCurrentState = ParserState.InApplication;
+			// post found new Receiver
+			mOnLoadProgressListener.onNewReceiver(mCurrentComponent);
+			mCurrentComponent = null;
 		}
 	}
 
@@ -347,7 +363,13 @@ public class ReceiverReader {
 		// Add this receiver to the result
 		IntentFilterInfo filter = new IntentFilterInfo(
 				mCurrentComponent, action, mCurrentFilterPriority);
-		mResult.add(filter);
+		mCurrentComponent.intentFilters.add(filter);
+		if (mResult != null) {
+			mResult.add(filter);
+		}
+		if (mOnLoadProgressListener != null) {
+			mOnLoadProgressListener.onNewIntentFilterInfo(filter);
+		}
 	}
 
 	void endAction() {
