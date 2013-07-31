@@ -5,7 +5,7 @@ https://github.com/miracle2k/android-autostarts
 The feature added is below:
 
 * Speed up load process by change the sort algorithm.
-* Notify user when there is newly installed package, so that user can disable some receiver immediately
+* Notify user when there is newly installed package, so that user can disable some receiver immediately, this feature are not stable yet, you can disable the feature by disable this application's receiver.
 * The view option add a "hide disabled component" and a "hide enabled component" argument, this will usefull when user rummaged through a devices that have so many package to looking the particular component to disable.
 * Sort the component by last update time when grouping by application.
 
