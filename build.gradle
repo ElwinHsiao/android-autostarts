@@ -1,0 +1,43 @@
+buildscript {
+    repositories {
+        mavenCentral()
+		
+	//	maven {
+        //   url "http://10.231.132.140:8081/nexus/content/repositories/android/"
+        //}
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:1.0.1'
+    }
+}
+
+apply plugin: 'android'
+
+
+ext {
+    compileSdkVersion = 21
+    buildToolsVersion = '21.1.1'
+}
+
+android {
+    compileSdkVersion rootProject.ext.compileSdkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+	
+	
+     sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src', 'src-opt/default']
+            resources.srcDirs = ['src']
+            aidl.srcDirs = ['src']
+            renderscript.srcDirs = ['src']
+            res.srcDirs = ['res']
+            assets.srcDirs = ['assets']
+        }
+    }
+}
+
+dependencies {
+    compile fileTree(dir: 'libs', include: '*.jar')
+}

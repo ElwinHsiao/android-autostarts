@@ -1,14 +1,16 @@
 package com.elsdoerfer.android.autostarts;
 
-import android.app.*;
-import android.support.v4.app.DialogFragment;
+import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.ActivityNotFoundException;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.support.v4.app.DialogFragment;
 import android.text.Html;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.TextView;
 import com.elsdoerfer.android.autostarts.db.IntentFilterInfo;
@@ -38,10 +40,10 @@ public class EventDetailsFragment extends DialogFragment {
     @Override
     public Dialog onCreateDialog(Bundle savedInstanceState) {
         final IntentFilterInfo event = getArguments().getParcelable("event");
-        final ListActivity activity = (ListActivity)getActivity();
+        final ListActivity activity = (ListActivity) getActivity();
 
-        View v = activity.getLayoutInflater().inflate(
-                R.layout.receiver_info_panel, null, false);
+        View v = LayoutInflater.from(getActivity()).inflate(
+		        R.layout.receiver_info_panel, null, false);
         String formattedString = String.format(
 				getString(R.string.receiver_info),
 				event.componentInfo.componentName, event.action, event.priority);

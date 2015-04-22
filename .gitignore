@@ -10,7 +10,8 @@
 
 # IDEA
 /*.iml
-/.idea/
+/.idea
+/build
 
 # Fabric
 # fabric
@@ -18,5 +19,3 @@
 *.pyc
 /bin
 /project.properties
-
-/libs/android-support-v4.jar
